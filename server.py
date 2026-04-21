@@ -1,58 +1,100 @@
 
 import os
+
+from fastapi import FastAPI
+from mcp.types import ToolAnnotations
+
 from fastmcp import FastMCP
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse, JSONResponse
-import requests
+from fastmcp.server.auth.providers.google import GoogleProvider
 
-# --- CONFIG ---
-CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+# --- Public URL (HTTPS, no trailing slash) — must match how clients reach this host
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://mcp.techsup.od.ua").rstrip("/")
 
-AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
-TOKEN_URI = "https://oauth2.googleapis.com/token"
+# Google OAuth (for FastMCP GoogleProvider → ChatGPT / OpenAI connector OAuth)
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+
+
+def _build_auth() -> GoogleProvider | None:
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return None
+    return GoogleProvider(
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        base_url=PUBLIC_BASE_URL,
+        resource_base_url=PUBLIC_BASE_URL,
+        required_scopes=["openid", "email", "profile"],
+        valid_scopes=["openid", "email", "profile"],
+    )
+
+
+auth = _build_auth()
 
 # --- MCP ---
-mcp = FastMCP("ai-tools-echo")
+mcp = FastMCP(
+    "ai-tools-echo",
+    auth=auth,
+    instructions=(
+        "Echo demo tools for connectivity testing. Use echo to repeat text; "
+        "use echo_upper to return uppercase text."
+    ),
+)
 
-@mcp.tool()
-def echo(text: str):
+
+@mcp.tool(
+    name="echo",
+    title="Echo text",
+    description=(
+        "Use this when you need to repeat the user's input verbatim or verify that "
+        "the MCP connector is working."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+def echo(text: str) -> dict[str, str]:
     return {"echo": text}
 
-@mcp.tool()
-def echo_upper(text: str):
+
+@mcp.tool(
+    name="echo_upper",
+    title="Echo text in uppercase",
+    description=(
+        "Use this when you need the same text as the user provided, but in UPPERCASE "
+        "(for quick formatting checks)."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+def echo_upper(text: str) -> dict[str, str]:
     return {"echo_upper": text.upper()}
 
-# --- FASTAPI WRAPPER ---
-app = FastAPI()
+
+# Streamable HTTP + OAuth routes live on this Starlette app at the root of the host.
+# MCP JSON-RPC endpoint: POST https://<host>/mcp
+mcp_app = mcp.http_app(path="/mcp")
+
+
+# FastAPI only adds a small health surface; everything else is delegated to mcp_app (mounted at /).
+app = FastAPI(
+    title="ai-tools-echo",
+    lifespan=mcp_app.lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
 
 @app.get("/")
 def root():
-    return {"status": "running"}
-
-@app.get("/auth/login")
-def login():
-    url = (
-        f"{AUTH_URI}?response_type=code"
-        f"&client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
-        f"&scope=openid email profile"
-    )
-    return RedirectResponse(url)
-
-@app.get("/auth/callback")
-async def callback(request: Request):
-    code = request.query_params.get("code")
-    data = {
-        "code": code,
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "redirect_uri": REDIRECT_URI,
-        "grant_type": "authorization_code",
+    return {
+        "status": "running",
+        "mcp": f"{PUBLIC_BASE_URL}/mcp",
+        "oauth": bool(auth),
     }
-    token = requests.post(TOKEN_URI, data=data).json()
-    return JSONResponse(token)
 
-# Mount MCP
-app.mount("/mcp", mcp.app)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# Mount MCP + OAuth + well-known at host root so RFC discovery paths match ChatGPT / OpenAI clients.
+app.mount("/", mcp_app)
