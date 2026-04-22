@@ -5,7 +5,7 @@ source .venv/bin/activate
 
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
-PIDFILE="${PIDFILE:-${PWD}/.uvicorn.pid}"
+PIDFILE="${PIDFILE:-${PWD}/.hypercorn.pid}"
 
 rm -f "$PIDFILE"
 cleanup() {
@@ -13,6 +13,6 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-uvicorn server:app --host "$HOST" --port "$PORT" &
+hypercorn server:app --bind "${HOST}:${PORT}" &
 echo $! >"$PIDFILE"
 wait

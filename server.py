@@ -7,13 +7,25 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+import time
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.google import GoogleProvider
 from mcp.types import ToolAnnotations
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+# Логи HTTP в консоль (stderr), независимо от настройки root у hypercorn/uvicorn.
+_http_log = logging.getLogger("simple_mcp.http")
+if not _http_log.handlers:
+    _h = logging.StreamHandler(sys.stderr)
+    _h.setFormatter(logging.Formatter("%(asctime)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+    _http_log.addHandler(_h)
+    _http_log.setLevel(logging.INFO)
+    _http_log.propagate = False
 
 load_dotenv()
 
@@ -126,4 +138,30 @@ async def _health(_request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+class _RequestTimingMiddleware(BaseHTTPMiddleware):
+    """Пишет запрос в консоль и добавляет в ответ время обработки (мс)."""
+
+    async def dispatch(self, request: Request, call_next):
+        t0 = time.perf_counter()
+        path = request.url.path
+        if request.url.query:
+            path = f"{path}?{request.url.query}"
+        _http_log.info("-> %s %s", request.method, path)
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        dur = f"{elapsed_ms:.3f}"
+        response.headers["X-Response-Time-Ms"] = dur
+        # dur в Server-Timing — миллисекунды (RFC 9110).
+        response.headers["Server-Timing"] = f"app;dur={dur}"
+        _http_log.info(
+            "<- %s %s %s %.3f ms",
+            request.method,
+            path,
+            getattr(response, "status_code", "?"),
+            elapsed_ms,
+        )
+        return response
+
+
 app = mcp.http_app(path="/mcp", transport="streamable-http")
+app.add_middleware(_RequestTimingMiddleware)

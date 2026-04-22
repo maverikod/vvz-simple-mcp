@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-PIDFILE="${PIDFILE:-${PWD}/.uvicorn.pid}"
+PIDFILE="${PIDFILE:-${PWD}/.hypercorn.pid}"
 
 if [[ ! -f "$PIDFILE" ]]; then
 	echo "Не запущен (нет $PIDFILE)."

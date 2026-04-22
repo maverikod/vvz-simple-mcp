@@ -1,4 +1,5 @@
 .DS_Store
+.hypercorn.pid
 .uvicorn.pid
 
 # Byte-compiled / optimized / DLL files

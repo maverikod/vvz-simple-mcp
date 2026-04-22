@@ -14,10 +14,10 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 # или: pip install -e .
 cp .env.example .env   # при необходимости заполните PUBLIC_BASE_URL и GOOGLE_*
-./run.sh                 # пишет .uvicorn.pid; остановка: ./stop.sh; статус: ./status.sh
+./run.sh                 # пишет .hypercorn.pid; остановка: ./stop.sh; статус: ./status.sh
 ```
 
-Переменные (опционально): `PORT` (по умолчанию 8000), `HOST` (по умолчанию 0.0.0.0), `PIDFILE` (по умолчанию `./.uvicorn.pid`).
+Переменные (опционально): `PORT` (по умолчанию 8000), `HOST` (по умолчанию 0.0.0.0), `PIDFILE` (по умолчанию `./.hypercorn.pid`).
 
 - MCP: `{PUBLIC_BASE_URL}/mcp` (по умолчанию `http://127.0.0.1:8000/mcp`)
 - `GET /health`, `GET /`
