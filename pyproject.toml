@@ -1,3 +1,17 @@
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple-mcp"
+version = "0.1.0"
+description = "MCP для ChatGPT (fastmcp + streamable HTTP, опционально Google OAuth)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp>=3.0",
+    "python-dotenv>=1.0",
+]
+
+[tool.setuptools]
+py-modules = ["server"]

@@ -1,6 +1,3 @@
-
-fastmcp
-fastapi
-uvicorn
-requests
-python-dotenv
+# OpenAI Apps SDK: Python — https://developers.openai.com/apps-sdk/build/mcp-server/
+fastmcp>=3.0
+python-dotenv>=1.0

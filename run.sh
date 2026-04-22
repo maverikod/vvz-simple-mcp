@@ -2,10 +2,17 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 source .venv/bin/activate
-if [[ -f .env ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
-fi
-exec uvicorn server:app --host 0.0.0.0 --port 8000
+
+PORT="${PORT:-8000}"
+HOST="${HOST:-0.0.0.0}"
+PIDFILE="${PIDFILE:-${PWD}/.uvicorn.pid}"
+
+rm -f "$PIDFILE"
+cleanup() {
+	rm -f "$PIDFILE"
+}
+trap cleanup EXIT INT TERM
+
+uvicorn server:app --host "$HOST" --port "$PORT" &
+echo $! >"$PIDFILE"
+wait
